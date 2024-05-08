@@ -1,0 +1,98 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity wristwatch is
+    Port ( b1 : in STD_LOGIC;
+           b2 : in STD_LOGIC;
+           b3 : in STD_LOGIC;
+           clk: in STD_LOGIC);
+           
+end wristwatch;
+
+architecture Behavioral of wristwatch is
+
+component deBouncer is
+    Port ( bin : in STD_LOGIC;
+           bout : out STD_LOGIC;
+           clk : in STD_LOGIC;
+           rst : in STD_LOGIC);
+end component;
+
+signal rst:std_logic:=b1 and b2 and b3; --rst debouncer, cred ca se face o bucla de reset si nu mai merge resteul global deloc :/
+                                          -- as pune un buton separat de reset dar ceasul are numai 3 butoane soooo
+--semnale debounce-uite
+signal b1out:std_logic;
+signal b2out:std_logic;
+signal b3out:std_logic;
+
+signal rst_glb:std_logic:=b1out and b2out and b3out; --reset global
+
+--fsm states and watch states
+type fsm_state is (start,afis_ora,set_alrm,set_tmr,stp_wtch,set_hr,set_min);
+signal crt_state,nxt_state,top_state:fsm_state;
+
+
+begin
+
+--mapare debouncer
+deBounce1: deBouncer port map (bin=>b1,bout=>b1out,clk=>clk,rst=>rst);
+deBounce2: deBouncer port map (bin=>b2,bout=>b2out,clk=>clk,rst=>rst);
+deBounce3: deBouncer port map (bin=>b3,bout=>b3out,clk=>clk,rst=>rst);
+
+rst_clk_sens: process(rst_glb,clk)  
+begin
+if (rst_glb='1') then
+    crt_state<=start;
+    top_state<=start;
+elsif rising_edge (clk) then
+    crt_state<=nxt_state; 
+end if;
+end process;
+
+states: process(crt_state,b1out,b2out)
+begin
+case crt_state is
+    when start=>nxt_state<=afis_ora;top_state<=afis_ora;
+    when afis_ora=>
+                    if b1out='1' then
+                        nxt_state<=set_alrm;
+                        top_state<=set_alrm;
+                    elsif b2out='1' then
+                        nxt_state<=set_hr;
+                    end if;
+    when set_alrm=>
+                    if b1out='1' then
+                        nxt_state<=set_tmr;
+                        top_state<=set_tmr;
+                    elsif b2out='1' then
+                        nxt_state<=set_hr;
+                    end if;
+    when set_tmr=>
+                    if b1out='1' then
+                        nxt_state<=stp_wtch;
+                        top_state<=stp_wtch;
+                    elsif b2out='1' then
+                        nxt_state<=set_hr;
+                    end if;
+    when stp_wtch=>
+                    if b1out='1' then
+                        nxt_state<=afis_ora;
+                        top_state<=afis_ora;
+                    end if;  
+    when set_hr=>
+                    if b2out='1' then
+                        nxt_state<=set_min;
+                    end if;
+    when set_min=>
+                    if b2out='1' then
+                        nxt_state<=top_state;
+                    end if;                                                     
+end case;
+
+end process;
+
+
+
+
+end Behavioral;
