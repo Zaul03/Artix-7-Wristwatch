@@ -14,11 +14,7 @@
 	- [x] Starile aferente: Setare ora, setare minute, secunde implicit la 00.
 - [ ] Circuitele aferente
 	- [ ] Ceasul
-		- [ ] Div frecventa T=1s
-		- [ ] Modul de lucru fct de stare fsm
-		- [ ] Incarcare
-		- [ ] Intrare de incarcare
-		- [ ] Iesire timp/date
+		- [x] Div frecventa T=1s
 		- [ ] Cronometru
 		- [ ] Timer
 			- [ ] alarma la final
@@ -51,3 +47,7 @@
 	Am mappat debouncerele si butoanele, am facut rst la debouncere (care cred ca intra intr o bucla de rst care nu ma lasa sa dau rst global)
 	Am initializat starile automatului si am creat si restul starilor. Am folosit un top_state pt a sti care e starea din care am pornit la set_hr si set_min.
 	Mai trebuie sa explicitez starile pt fiecare si sa le fac procesele, dupa ma apuc de ceas si displayul 7 seg.
+- Day 3
+	Am renuntat la ideea de a avea mai putine stari, era prea complicata si incepea sa ma oboseasca si nici nu terminam proiectul. Am desenat diagrama de tranzitii in detaliu si cu semnalele aferente, cred ca a iesit mult mai bine.
+	Am facut si divizorul de frecventa pentru ceas (T=1s) intr-un fisier de design separat. O sa fac la fel si pentru cat se poate din restul circuitelor aferente. Imi este mai usor sa ma descurc cu un proiect de aceasta dimensiune. 
+	O sa modific si bucket listul pentru ca nu cred ca mai este la curent cu ce vreau sa ajunga proiectul.
