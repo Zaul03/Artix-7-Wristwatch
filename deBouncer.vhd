@@ -11,7 +11,7 @@ end deBouncer;
 
 architecture Behavioral of deBouncer is
 
-constant max_count :integer:=10000000; ---- 0.1s
+constant max_count :integer:=40000000; ---- 0.4s
 constant btn_actv :std_logic:='1'; --buton activ pe 1
 type state_type is(idle,waiting);
 signal count:integer:=0;
