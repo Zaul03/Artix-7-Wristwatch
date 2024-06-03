@@ -14,38 +14,38 @@ end driver7seg;
 
 architecture Behavioral of driver7seg is
 
-signal clk1kHz : STD_LOGIC;
-signal state : STD_LOGIC_VECTOR(16 downto 0); --semnalul in care se pune var de numarare
-signal addr : STD_LOGIC_VECTOR(1 downto 0);
-signal cseg : STD_LOGIC_VECTOR(3 downto 0); --catod 7 seg
+signal clk1kHz : STD_LOGIC:='0';
+--signal state : STD_LOGIC_VECTOR(16 downto 0); --semnalul in care se pune var de numarare
+signal addr : STD_LOGIC_VECTOR(1 downto 0):="00";
+signal cseg : STD_LOGIC_VECTOR(3 downto 0):="0000"; --catod 7 seg
+signal seg_net:STD_LOGIC_VECTOR (0 to 6):="0000000";
 
 begin
 
 -- frequency divider by 100k to generate 1kHz anode sweeping clock
 -- counting from 0 to 99999, output is MSB 
 -- 17 counter state length needed 
-div1kHz: process(clk, rst)
-begin
-   if rst = '1' then 
-        state <= '0' & X"0000";
-   else
-     if rising_edge(clk) then
-        if state = '1' & X"869F" then --if counte reaches 99999
-            state <= '0' & X"0000"; -- reset back to 0
-        else
-            state <= state+1;
-        end if;
-     end if;
-   end if;         
-end process;
-
-clk1Khz <= state(16); --assign MSB to frequency divider output
-
+--div1kHz: process(clk, rst)
+--begin
+--   if rst = '1' then 
+--        state <= '0' & X"0000";
+--   else
+--     if rising_edge(clk) then
+--        if state = '1' & X"869F" then --if counte reaches 99999
+--            state <= '0' & X"0000"; -- reset back to 0
+--        else
+--            state <= state+1;
+--        end if;
+--     end if;
+--   end if;         
+--end process;
+clk1Khz <= clk; --assign MSB to frequency divider output
+seg<=seg_net;
 
 -- 2 bit counter generating 4 addresses for display multiplexing
-counter_2bits: process(clk1kHz)
+counter_2bits: process(clk)
 begin
-  if rising_edge(clk1kHz) then       
+  if rising_edge(clk) then       
            addr <= addr+1;   
   end if;   
 end process;
@@ -86,23 +86,23 @@ end process;
 dcd7seg:process(cseg)
 begin
   case cseg is
-      when "0000" =>  seg <= "0000001"; --0
-      when "0001" =>  seg <= "1001111"; --1
-      when "0010" =>  seg <= "0010010"; --2
-      when "0011" =>  seg <= "0000110"; --3
-      when "0100" =>  seg <= "1001100"; --4
-      when "0101" =>  seg <= "0100100"; --5
-      when "0110" =>  seg <= "0100000"; --6
-      when "0111" =>  seg <= "0001111"; --7
-      when "1000" =>  seg <= "0000000"; --8
-      when "1001" =>  seg <= "0000100"; --9
-      when "1010" =>  seg <= "0000010"; --a
-      when "1011" =>  seg <= "1100000"; --b
-      when "1100" =>  seg <= "0110001"; --c
-      when "1101" =>  seg <= "1000010"; --d
-      when "1110" =>  seg <= "0110000"; --e
-      when "1111" =>  seg <= "0111000";--f
-      when others => seg <= "XXXXXXX";
+      when "0000" =>  seg_net <= "0000001"; --0
+      when "0001" =>  seg_net <= "1001111"; --1
+      when "0010" =>  seg_net <= "0010010"; --2
+      when "0011" =>  seg_net <= "0000110"; --3
+      when "0100" =>  seg_net <= "1001100"; --4
+      when "0101" =>  seg_net <= "0100100"; --5
+      when "0110" =>  seg_net <= "0100000"; --6
+      when "0111" =>  seg_net <= "0001111"; --7
+      when "1000" =>  seg_net <= "0000000"; --8
+      when "1001" =>  seg_net <= "0000100"; --9
+      when "1010" =>  seg_net <= "0000010"; --a
+      when "1011" =>  seg_net <= "1100000"; --b
+      when "1100" =>  seg_net <= "0110001"; --c
+      when "1101" =>  seg_net <= "1000010"; --d
+      when "1110" =>  seg_net <= "0110000"; --e
+      when "1111" =>  seg_net <= "0111000";--f
+      when others => seg_net <= "XXXXXXX";
    end case; 
 end process;
 
