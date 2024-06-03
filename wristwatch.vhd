@@ -49,28 +49,38 @@ end component;
 -----------------------------------------
 --------------Semnale si var-------------
 
-signal rst:std_logic:=b1 and b2 and b3;  --reset
-signal blink_left:std_logic:='0';          --blink when setting hr
-signal blink_right:std_logic:='0';         --blink when setting min
+--butoane debounce-uite-------
+signal b1out:std_logic;
+signal b2out:std_logic;
+signal b3out:std_logic;
+
+signal seg_net:STD_LOGIC_VECTOR (0 to 6):="000000";
+
+
+signal rst:std_logic:='0';  --reset
+
+signal blink_left:std_logic:='0';        --blink when setting hr
+signal blink_right:std_logic:='0';       --blink when setting min
+
 signal al_on:std_logic:='0';             --alarma este/nu este activata
-signal alarm:std_logic:='0';             --porneste circuitul de alarma   
-signal f1hz:std_logic;                   --semanlul divizat cu T=1s   
-signal inc_hr,inc_min:std_logic;         --incrementare timp
+signal alarm:std_logic:='0';                  --porneste circuitul de alarma 
+signal al_en:std_logic:='0';   -- clk and alarm  
+
+signal f1hz:std_logic:='0';                   --semanlul divizat cu T=1s 
+  
+signal inc_hr,inc_min:std_logic:='0';         --incrementare timp
 constant max_al_time:integer:=60;        --timpul maxim in secunde pentru care suna alarma (nu este valabil si pentru timer)
 signal al_ctr:integer:=0;                --variabila pt numarat secundele
 
 
-signal d:std_logic_vector(15 downto 0);  --date binare de trimis la driver
-signal dp:std_logic_vector(3 downto 0);  -- decimal point, activ pe 0
+signal d:std_logic_vector(15 downto 0):="0000000000000000";  --date binare de trimis la driver
+signal dp:std_logic_vector(3 downto 0):="1111";  -- decimal point, activ pe 0
 signal anode:std_logic_vector (3 downto 0); --semnal pt a genera semnalul de blink pe display
-signal ore_min:std_logic_vector(15 downto 0);--semnal pt display
-signal min_sec:std_logic_vector(15 downto 0);--...
+signal ore_min:std_logic_vector(15 downto 0):="0000000000000000";--semnal pt display
+signal min_sec:std_logic_vector(15 downto 0):="0000000000000000";--...
+
 
                                           
---butoane debounce-uite-------
-signal b1out:std_logic:='0';
-signal b2out:std_logic:='0';
-signal b3out:std_logic:='0';
 
 ------states------------------
 type state is (start,                                                                   --starting state
@@ -83,10 +93,10 @@ type state is (start,                                                           
                
 signal crt_state,nxt_state:state;
 
------time types---------------
+-----time types--------------
 type sec is record
- dig1:integer range 0 to 9;
- dig2:integer range 0 to 5;
+ dig1:integer range 0 to 15;
+ dig2:integer range 0 to 15;
 end record;
 
 type min is record
@@ -106,6 +116,8 @@ type timp is record
 end record;
 ------------------------------
 
+
+
 -----------time var---------------------
 signal t:timp:=((0,0),(0,0),(0,0));         --ora ceasului
 signal t_al:timp:=((0,0),(0,0),(0,0));      --ora alarmei
@@ -113,7 +125,7 @@ signal t_tmr:timp:=((0,0),(0,0),(0,0));     --timp timer
 signal t_cron:timp:=((0,0),(0,0),(0,0));    --timp cronometru
 signal t_al_tmr:timp:=((0,0),(0,1),(0,0));  --durata alarma
 signal t_tmr_def:timp:=((0,0),(1,0),(0,0)); --timer default
-signal t_display:timp:=((0,0),(0,0),(0,0)); --variabila care este citita de driver
+signal t_display:timp; --variabila care este citita de driver
 ----------------------------------------
 ----------------------------------------
 
@@ -140,7 +152,12 @@ driver_display: driver7seg port map(
                                 dp_out=>dp_out ,
                                 rst=>rst);
                                 
-alarma_leduri: alarma port map(clk=>clk,rst=>rst,led=>led);
+alarma_leduri: alarma port map( clk=>al_en,
+                                rst=>rst,
+                                led=>led);
+                                
+al_en<=clk and alarm;
+rst<=b1out and b2out and b3out;
 ----------------------------------------------------------------------------------------
 
 
@@ -154,7 +171,7 @@ elsif rising_edge (clk) then
 end if;
 end process;
 
-states: process(crt_state,b1out)
+states: process(crt_state)
 begin
 case crt_state is
     when start=>nxt_state<=afis_ora;
@@ -165,10 +182,7 @@ case crt_state is
                         nxt_state<=set_hr;
                     else 
                         nxt_state<=afis_ora;
-                    end if;
-                    t_display<=t;
-                    d<=ore_min;
-                    
+                    end if;               
     when set_alrm=>
                     if b1out='1' then
                         nxt_state<=set_tmr;
@@ -178,13 +192,7 @@ case crt_state is
                         nxt_state<=turn_al_off;
                     else
                         nxt_state<=set_alrm;
-                    end if;
-                    t_display<=t_al;
-                    if al_on='1'then 
-                    d<=ore_min;
-                    else 
-                    d<="0000000000001111";
-                    end if;
+                    end if;  
     when set_tmr=>
                     if b1out='1' then
                         nxt_state<=crono;
@@ -195,8 +203,6 @@ case crt_state is
                      else
                         nxt_state<=set_tmr; 
                     end if;
-                    t_display<=t_tmr;
-                    d<=ore_min;
     when crono=>
                     if b1out='1' then
                         nxt_state<=afis_ora;
@@ -204,61 +210,45 @@ case crt_state is
                         nxt_state<=start_cron;
                      else
                         nxt_state<=crono;    
-                    end if;
-                    t_display<=t_cron;
-                    d<=min_sec;
+                    end if;                   
     when set_hr=> 
                     if b2out='1' then
                         nxt_state<=set_min;
-                     else
+                    else
                         nxt_state<=set_hr;    
-                    end if;
-                    t_display<=t;
-                    d<=ore_min;
+                    end if;                    
     when set_min=> 
                     if b2out='1' then
                         nxt_state<=afis_ora;
                      else
                         nxt_state<=set_min;    
-                    end if;    
-                    t_display<=t;
-                    d<=ore_min;                            
+                    end if;                                                 
     when set_al_hr=> 
                     if b2out='1' then
                         nxt_state<=set_al_min;
                      else
                         nxt_state<=set_al_hr;    
                     end if;
-                    t_display<=t_al;
-                    d<=ore_min;
     when set_al_min=> 
                     if b2out='1' then
                         nxt_state<=set_alrm;
                     else
                        nxt_state<=set_al_min;
                     end if;
-                    t_display<=t_al;
-                    d<=ore_min;
     when turn_al_off=>
                     nxt_state<=set_alrm;  
-                    t_display<=t_al;
-                    d<="0000000000001111";
     when set_hr_tmr=> 
                     if b2out='1' then
                         nxt_state<=set_min_tmr;
                      else
                         nxt_state<=set_hr_tmr;    
                     end if;
-                    t_display<=t_tmr;
-                    d<=ore_min;
     when set_min_tmr=> 
                     if b2out='1' then
                         nxt_state<=set_tmr;
                      else
                         nxt_state<=set_min_tmr;
                     end if;
-                    t_display<=t_tmr;
-                    d<=ore_min;
     when start_tmr=>
                     if b2out='1' then
                         nxt_state<=stop_tmr;
@@ -268,9 +258,7 @@ case crt_state is
                         nxt_state<=tmr_ended;
                     else
                         nxt_state<=start_tmr;
-                    end if;
-                    t_display<=t_tmr;
-                    d<=ore_min;
+                    end if;                
     when pause_tmr=>
                     if b3out='1' then
                         nxt_state<=start_tmr;
@@ -279,18 +267,12 @@ case crt_state is
                      else
                         nxt_state<=pause_tmr;        
                     end if;
-                    t_display<=t_tmr;
-                    d<=ore_min;
     when stop_tmr=>
                     nxt_state<=set_tmr;
-                    t_display<=t_tmr;
-                    d<=ore_min;
     when tmr_ended=>
                     if b3out='1' then
                         nxt_state<=stop_tmr;
-                    end if;
-                    t_display<=t_tmr;
-                    d<=ore_min;                
+                    end if;                
     when start_cron=>
                     if b2out='1' then
                         nxt_state<=stop_cron;
@@ -299,24 +281,18 @@ case crt_state is
                      else
                         nxt_state<=start_cron;        
                     end if;
-                    t_display<=t_cron;
-                    d<=min_sec;
     when pause_cron=>
                     if b3out='1' then
                         nxt_state<=start_cron;
                      else
                         nxt_state<=pause_cron;    
                     end if;
-                    t_display<=t_cron;
-                     d<=min_sec;
     when stop_cron=>
                     if b2out='1' then
                         nxt_state<=crono;
                      else
                         nxt_state<=stop_cron;    
                     end if;
-                    t_display<=t_cron;
-                    d<=min_sec;
     when others=> nxt_state<=start;                                                                                                                                                                                                                                                     
 end case;
 end process;
@@ -340,40 +316,8 @@ ceas_digital:process(rst,clk)  --ceasul digital in format de 24Hr
 begin
 if rst='1' then
       t<=((0,0),(0,0),(0,0));
-elsif rising_edge (clk) then
-    if f1hz = '1' then                        --incre secunde si pt cazurile in care sec sunt la 09, 19, 29 ... 59
-        if t.sec.dig1 = 9 then                              
-            t.sec.dig1 <= 0;
-            if t.sec.dig2 = 5 then
-                t.sec.dig2 <= 0;
-                if t.min.dig1 = 9 then
-                    t.min.dig1 <= 0;
-                    if t.min.dig2 = 5 then
-                        t.min.dig2 <= 0;
-                        if t.hr.dig1 = 3 and t.hr.dig2 = 2 then
-                            t.hr.dig1 <= 0;
-                            t.hr.dig2 <= 0;
-                        elsif t.hr.dig1 = 9 then
-                            t.hr.dig1 <= 0;
-                            t.hr.dig2 <= t.hr.dig2 + 1;
-                        else t.hr.dig1 <= t.hr.dig1 + 1;
-                        end if;
-                    else
-                        t.min.dig2 <= t.min.dig2 + 1;
-                    end if;
-                else
-                    t.min.dig1 <= t.min.dig1 + 1;
-                end if;
-            else
-                t.sec.dig2 <= t.sec.dig2 + 1;
-            end if;
-        else
-            t.sec.dig1 <= t.sec.dig1 + 1;
-        end if;
-   
-   
-   
-    elsif inc_min = '1' and crt_state=set_min then                --inc_min este 1 in starea de setat minutele
+elsif rising_edge (clk) then    
+    if inc_min = '1' and crt_state=set_min then                --inc_min este 1 in starea de setat minutele
         if t.min.dig1 = 9 then
             t.min.dig1 <= 0;
                 if t.min.dig2 = 5 then
@@ -394,9 +338,40 @@ elsif rising_edge (clk) then
         else
             t.hr.dig1 <= t.hr.dig1 + 1;
         end if;
-    end if;
-    
-end if;
+    else 
+        if f1hz = '1' then                        --incre secunde si pt cazurile in care sec sunt la 09, 19, 29 ... 59
+            if t.sec.dig1 = 9 then                              
+                t.sec.dig1 <= 0;
+                if t.sec.dig2 = 5 then
+                    t.sec.dig2 <= 0;
+                    if t.min.dig1 = 9 then
+                            t.min.dig1 <= 0;
+                            if t.min.dig2 = 5 then
+                                t.min.dig2 <= 0;
+                                if t.hr.dig1 = 3 and t.hr.dig2 = 2 then
+                                    t.hr.dig1 <= 0;
+                                    t.hr.dig2 <= 0;
+                                elsif t.hr.dig1 = 9 then
+                                    t.hr.dig1 <= 0;
+                                    t.hr.dig2 <= t.hr.dig2 + 1;
+                                else t.hr.dig1 <= t.hr.dig1 + 1;
+                                end if;
+                            else
+                                t.min.dig2 <= t.min.dig2 + 1;
+                            end if;
+                        else
+                            t.min.dig1 <= t.min.dig1 + 1;
+                        end if;
+                else
+                    t.sec.dig2 <= t.sec.dig2 + 1;
+                end if;
+            else
+                t.sec.dig1 <= t.sec.dig1 + 1;
+           end if;   
+        end if;        
+     end if;
+end if;   
+
 
 end process;
 
@@ -432,9 +407,9 @@ elsif rising_edge (clk) then
 end if;               
 end process;
 ---------------------------------------------------------------------
+
 validare_alaram: process(rst,clk)   --alarma desteptatoare sau oricare cateodata nu vrei sa sune in fiecare zi.
 begin                               --semnalul al_on valideaza alarma, sa suna sau nu la timpul setat
-
 if rst='1' then
     al_on<='0';
 elsif rising_edge (clk) then
@@ -444,7 +419,6 @@ elsif rising_edge (clk) then
         al_on<='0';     
     end if;
 end if;
-
 end process;
 
 
@@ -461,21 +435,20 @@ if rst='1' then
     al_ctr<=0;  --al_on depinde de reset deja in procesul de mai sus
 elsif rising_edge (clk) then
     if al_on='1' and t=t_al then                        --daca ora alarmei coencide cu ora ceasului o sa sune in timp ce este setata alarma
-            alarm<='1';
+        alarm<='1';                      
+    elsif crt_state=tmr_ended then
+        alarm<='1';
     elsif alarm='1' then
         if al_ctr=max_al_time or b3out='1' then     --oprire alarma dupa max_al_time secunde sau manual cu b3
             alarm<='0';
             al_ctr<=0;
         else 
         al_ctr<=al_ctr+1;    
-        end if;                       
+        end if;     
     else
         alarm<='0';
     end if;   
     
-    if crt_state=tmr_ended then   --alarma de la timer
-        alarm<='1';
-    end if;
 end if;
 
 end process;
@@ -487,7 +460,32 @@ begin
 if rst='1' then
     t_tmr<=((0,0),(1,0),(0,0)); 
 elsif rising_edge (clk) then
-    if f1hz = '1' and crt_state=start_tmr then 
+    if crt_state=pause_tmr then
+        t_tmr<=t_tmr;
+    elsif crt_state=stop_tmr then                                     --resetarea la valoarea default a timerului
+        t_tmr<=t_tmr_def;    
+    elsif inc_min = '1' and crt_state=set_min_tmr then                --inc_min este 1 in starea de setat minutele
+            if t_tmr.min.dig1 = 9 then
+             t_tmr.min.dig1 <= 0;
+                  if t_tmr.min.dig2 = 5 then
+                      t_tmr.min.dig2 <= 0;
+                  else
+                      t_tmr.min.dig2 <= t_tmr.min.dig2 + 1;
+                  end if;
+            else
+                t_tmr.min.dig1 <= t_tmr.min.dig1 + 1;
+            end if;
+    elsif inc_hr = '1' and crt_state=set_hr_tmr then         --si pt ore, 09, 19, 23
+            if t_tmr.hr.dig1 = 3 and t_tmr.hr.dig2 = 2 then
+                t_tmr.hr.dig1 <= 0;
+                t_tmr.hr.dig2 <= 0;
+            elsif t_tmr.hr.dig1 = 9 then
+                t_tmr.hr.dig1 <= 0;
+                t_tmr.hr.dig2 <= t_tmr.hr.dig2 + 1; 
+            else
+                t_tmr.hr.dig1 <= t_tmr.hr.dig1 + 1;
+            end if;
+    elsif f1hz = '1' and crt_state=start_tmr then 
         if t_tmr.sec.dig1=0 then
             if t_tmr.sec.dig2=0 then
                 if t_tmr.min.dig1=0 then
@@ -517,76 +515,50 @@ elsif rising_edge (clk) then
             end if;
         else
             t_tmr.sec.dig1<=t_tmr.sec.dig1-1;
-        end if;
-    elsif crt_state=pause_tmr then
-        t_tmr<=t_tmr;
-    elsif crt_state=stop_tmr then                                     --resetarea la valoarea default a timerului
-        t_tmr<=t_tmr_def;    
-    elsif inc_min = '1' and crt_state=set_min_tmr then                --inc_min este 1 in starea de setat minutele
-            if t_tmr.min.dig1 = 9 then
-             t_tmr.min.dig1 <= 0;
-                  if t_tmr.min.dig2 = 5 then
-                      t_tmr.min.dig2 <= 0;
-                  else
-                      t_tmr.min.dig2 <= t_tmr.min.dig2 + 1;
-                  end if;
-            else
-                t_tmr.min.dig1 <= t_tmr.min.dig1 + 1;
-            end if;
-        elsif inc_hr = '1' and crt_state=set_hr_tmr then         --si pt ore, 09, 19, 23
-            if t_tmr.hr.dig1 = 3 and t_tmr.hr.dig2 = 2 then
-                t_tmr.hr.dig1 <= 0;
-                t_tmr.hr.dig2 <= 0;
-            elsif t_tmr.hr.dig1 = 9 then
-                t_tmr.hr.dig1 <= 0;
-                t_tmr.hr.dig2 <= t_tmr.hr.dig2 + 1; 
-            else
-                t_tmr.hr.dig1 <= t_tmr.hr.dig1 + 1;
-            end if;
-     end if;
+        end if;        
+    end if;
 end if;            
 end process;
 
 
 cronometru:process(rst,clk)
 begin
-
 if rst='1' then
     t_cron<=((0,0),(0,0),(0,0));
 elsif rising_edge (clk)then
     if crt_state=start_cron then
-      if f1hz = '1' then                        --incre secunde si pt cazurile in care sec sunt la 09, 19, 29 ... 59
-        if t_cron.sec.dig1 = 9 then                              
-            t_cron.sec.dig1 <= 0;
-            if t_cron.sec.dig2 = 5 then
-                t_cron.sec.dig2 <= 0;
-                if t_cron.min.dig1 = 9 then
-                    t_cron.min.dig1 <= 0;
-                    if t_cron.min.dig2 = 5 then
-                        t_cron.min.dig2 <= 0;
-                        if t_cron.hr.dig1 = 3 and t_cron.hr.dig2 = 2 then
-                            t_cron.hr.dig1 <= 0;
-                            t_cron.hr.dig2 <= 0;
-                        elsif t_cron.hr.dig1 = 9 then
-                            t_cron.hr.dig1 <= 0;
-                            t_cron.hr.dig2 <= t_cron.hr.dig2 + 1;
-                        else t_cron.hr.dig1 <= t_cron.hr.dig1 + 1;
+          if f1hz = '1' then                        --incre secunde si pt cazurile in care sec sunt la 09, 19, 29 ... 59
+            if t_cron.sec.dig1 = 9 then                              
+                t_cron.sec.dig1 <= 0;
+                if t_cron.sec.dig2 = 5 then
+                    t_cron.sec.dig2 <= 0;
+                    if t_cron.min.dig1 = 9 then
+                        t_cron.min.dig1 <= 0;
+                        if t_cron.min.dig2 = 5 then
+                            t_cron.min.dig2 <= 0;
+                            if t_cron.hr.dig1 = 3 and t_cron.hr.dig2 = 2 then
+                                t_cron.hr.dig1 <= 0;
+                                t_cron.hr.dig2 <= 0;
+                            elsif t_cron.hr.dig1 = 9 then
+                                t_cron.hr.dig1 <= 0;
+                                t_cron.hr.dig2 <= t_cron.hr.dig2 + 1;
+                            else t_cron.hr.dig1 <= t_cron.hr.dig1 + 1;
+                            end if;
+                        else
+                            t_cron.min.dig2 <= t_cron.min.dig2 + 1;
                         end if;
                     else
-                        t_cron.min.dig2 <= t_cron.min.dig2 + 1;
+                        t_cron.min.dig1 <= t_cron.min.dig1 + 1;
                     end if;
                 else
-                    t_cron.min.dig1 <= t_cron.min.dig1 + 1;
+                    t_cron.sec.dig2 <= t_cron.sec.dig2 + 1;
                 end if;
             else
-                t_cron.sec.dig2 <= t_cron.sec.dig2 + 1;
+                t_cron.sec.dig1 <= t_cron.sec.dig1 + 1;
             end if;
-        else
-            t_cron.sec.dig1 <= t_cron.sec.dig1 + 1;
-        end if;
-      end if;
+          end if;
     elsif crt_state=pause_cron or crt_state=stop_cron then
-        t_cron<=t_cron;
+          t_cron<=t_cron;
     else 
     t_cron<=((0,0),(0,0),(0,0));        
     end if;
@@ -601,21 +573,86 @@ blink_right<='1' when (crt_state=set_min or crt_state=set_al_min or crt_state=se
 ----------------------------------------------------------Semnalizare--------------------------------------------------------------------------
 
 --------------------generare blink-------------------------
-an(3)<=(anode(3) or f1hz) when blink_left='1' else anode(3);
-an(2)<=(anode(2) or f1hz) when blink_left='1' else anode(2);
-an(1)<=(anode(1) or f1hz) when blink_right='1' else anode(1);
-an(0)<=(anode(0) or f1hz) when blink_right='1' else anode(0);
+an(3)<=anode(3);
+an(2)<=anode(2);
+an(1)<=anode(1);
+an(0)<=anode(0);
+dp_out<='0';
 ------------------------------------------------------------
 
+
+multiplex_display: process(crt_state)
+begin
+case crt_state is
+    when afis_ora=>t_display<=t;               
+    when set_alrm=>t_display<=t_al; 
+    when set_tmr=>t_display<=t_tmr; 
+    when crono=>t_display<=t_cron;                
+    when set_hr=>t_display<=t;                    
+    when set_min=>t_display<=t;                                                  
+    when set_al_hr=>t_display<=t_al; 
+    when set_al_min=>t_display<=t_al; 
+    when turn_al_off=> t_display<=t_al;
+    when set_hr_tmr=>t_display<=t_tmr;
+    when set_min_tmr=> t_display<=t_tmr;
+    when start_tmr=>t_display<=t_tmr;              
+    when pause_tmr=>t_display<=t_tmr;
+    when stop_tmr=>t_display<=t_tmr;
+    when tmr_ended=>t_display<=t_tmr;             
+    when start_cron=>t_display<=t_cron;
+    when pause_cron=>t_display<=t_cron;
+    when stop_cron=>t_display<=t_cron;
+    when others=>t_display<=t;                                                                                                                                                                                                                                                      
+end case;
+end process;
+
+
+
 ore_min <= std_logic_vector(to_unsigned(t_display.hr.dig2,4)) &
-                                 std_logic_vector(to_unsigned(t_display.hr.dig1,4)) &
-                                 std_logic_vector(to_unsigned(t_display.min.dig2,4)) &
-                                 std_logic_vector(to_unsigned(t_display.min.dig1,4));
+           std_logic_vector(to_unsigned(t_display.hr.dig1,4)) &
+           std_logic_vector(to_unsigned(t_display.min.dig2,4)) &
+           std_logic_vector(to_unsigned(t_display.min.dig1,4));
 
 min_sec <= std_logic_vector(to_unsigned(t_display.min.dig2,4)) &
-                                 std_logic_vector(to_unsigned(t_display.min.dig2,4)) &
-                                 std_logic_vector(to_unsigned(t_display.sec.dig2,4)) &
-                                 std_logic_vector(to_unsigned(t_display.sec.dig1,4));                                 
+           std_logic_vector(to_unsigned(t_display.min.dig2,4)) &
+           std_logic_vector(to_unsigned(t_display.sec.dig2,4)) &
+           std_logic_vector(to_unsigned(t_display.sec.dig1,4)); 
+           
+multiplex_time_format: process(crt_state)
+begin
+
+
+case crt_state is
+    when start=>d<=ore_min;
+    when afis_ora=>d<=ore_min;              
+    when set_alrm=>d<=ore_min;  
+    when set_tmr=>d<=ore_min; 
+    when crono=>d<=min_sec;               
+    when set_hr=> d<=ore_min;                
+    when set_min=>d<=ore_min;                                               
+    when set_al_hr=> d<=ore_min; 
+    when set_al_min=> d<=ore_min; 
+    when turn_al_off=>if al_on='1' then
+                           d<=ore_min;
+                       else 
+                           d<="0000000000001111";    
+                       end if;
+    when set_hr_tmr=>d<=ore_min; 
+    when set_min_tmr=>d<=ore_min; 
+    when start_tmr=>d<=ore_min;              
+    when pause_tmr=>d<=ore_min; 
+    when stop_tmr=>d<=ore_min; 
+    when tmr_ended=> d<=ore_min;            
+    when start_cron=>d<=min_sec;
+    when pause_cron=>d<=min_sec;
+    when stop_cron=>d<=min_sec;
+    when others=>d<=ore_min;                                                                                                                                                                                                                                                     
+end case;
+end process;
+
+
+
+                                
                                  
  
 
