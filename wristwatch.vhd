@@ -3,19 +3,20 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 entity wristwatch is
-    Port ( b1 : in STD_LOGIC;
-           b2 : in STD_LOGIC;
-           b3 : in STD_LOGIC;
+    Port ( b1 : in STD_LOGIC;  --left button
+           b2 : in STD_LOGIC;  --center buttom
+           b3 : in STD_LOGIC;  --right button
            clk: in STD_LOGIC;  --100MHz clock signal
-           an : out STD_LOGIC_VECTOR(3 downto 0);
-           seg : out STD_LOGIC_VECTOR (0 to 6);
-           dp_out : out STD_LOGIC;
-           led:out std_logic_vector(15 downto 0));
-           
+           an : out STD_LOGIC_VECTOR(3 downto 0);      --anode of each 7seg, it displays the data when pulled low
+           seg : out STD_LOGIC_VECTOR (0 to 6);        --the data to be displayed, led light up when pulled low
+           dp_out : out STD_LOGIC;                     --the decimal point, i don't use it 
+           led:out std_logic_vector(15 downto 0));     --leds for signaling the alarm, this was only to show 
+                                                       --if it works as i dont have a buzzer to ring the alarm
 end wristwatch;
 
 architecture Behavioral of wristwatch is
 
+    --debouncer
 component deBouncer is
     Port ( bin : in STD_LOGIC;
            bout : out STD_LOGIC;
@@ -23,23 +24,32 @@ component deBouncer is
            rst : in STD_LOGIC);
 end component;
 
---sursa semnalalui cu periaoda de 1 sec
+
+
+    
+--clock signal with a period of 1 second
 component clock_1s is
     Port ( clk : in STD_LOGIC;
            rst : in STD_LOGIC;
            clk_T1s : out STD_LOGIC);
 end component;
 
+
+
+
+    
 component driver7seg is
-    Port ( clk : in STD_LOGIC; --100MHz board clock input
-           Din : in STD_LOGIC_VECTOR (15 downto 0); --16 bit binary data for 4 displays
-           an : out STD_LOGIC_VECTOR (3 downto 0); --anode outputs selecting individual displays 3 to 0
-           seg : out STD_LOGIC_VECTOR (0 to 6); -- cathode outputs for selecting LED-s in each display
-           dp_in : in STD_LOGIC_VECTOR (3 downto 0); --decimal point input values
-           dp_out : out STD_LOGIC; --selected decimal point sent to cathodes
-           rst : in STD_LOGIC); --global reset
+    Port ( clk : in STD_LOGIC;                         --100MHz board clock input
+           Din : in STD_LOGIC_VECTOR (15 downto 0);    --16 bit binary data for 4 displays
+           an : out STD_LOGIC_VECTOR (3 downto 0);     --anode outputs selecting individual displays 3 to 0
+           seg : out STD_LOGIC_VECTOR (0 to 6);        --cathode outputs for selecting LED-s in each display
+           dp_in : in STD_LOGIC_VECTOR (3 downto 0);   --decimal point input values
+           dp_out : out STD_LOGIC;                     --selected decimal point sent to cathodes
+           rst : in STD_LOGIC);                        --reset
 end component;
 
+    
+    --the alarm in this case, i didnt put 
 component alarma is
     Port ( rst : in STD_LOGIC;
            clk : in STD_LOGIC;
@@ -49,39 +59,43 @@ end component;
 -----------------------------------------
 --------------Semnale si var-------------
 
-signal rst:std_logic:=b1 and b2 and b3;  --reset
-signal blink_left:std_logic:='0';          --blink when setting hr
-signal blink_right:std_logic:='0';         --blink when setting min
-signal al_on:std_logic:='0';             --alarma este/nu este activata
-signal alarm:std_logic:='0';             --porneste circuitul de alarma   
-signal f1hz:std_logic;                   --semanlul divizat cu T=1s   
-signal inc_hr,inc_min:std_logic;         --incrementare timp
-constant max_al_time:integer:=60;        --timpul maxim in secunde pentru care suna alarma (nu este valabil si pentru timer)
-signal al_ctr:integer:=0;                --variabila pt numarat secundele
+signal rst:std_logic:=b1 and b2 and b3;      --reset
+signal blink_left:std_logic:='0';            --enables blinking for the digits on the left
+signal blink_right:std_logic:='0';           --enables blinking for the digits on the right
+signal al_on:std_logic:='0';                 --alarm flag
+signal alarm:std_logic:='0';                 --if high the alarm rings, alarm also rings when stopwatch
+signal f1hz:std_logic;                       --clock signal with period of 1 sec   
+signal inc_hr,inc_min:std_logic;             --hour and minute incrementation flags
+constant max_al_time:integer:=60;            --maximum alarm time (not true for when the timer ends)
+signal al_ctr:integer:=0;                    --variable for counting how long the alarm rings
 
 
-signal d:std_logic_vector(15 downto 0);  --date binare de trimis la driver
-signal dp:std_logic_vector(3 downto 0);  -- decimal point, activ pe 0
-signal anode:std_logic_vector (3 downto 0); --semnal pt a genera semnalul de blink pe display
-signal ore_min:std_logic_vector(15 downto 0);--semnal pt display
-signal min_sec:std_logic_vector(15 downto 0);--...
+signal d:std_logic_vector(15 downto 0);      --binary data sent to the 7seg driver, 4 sets of 4 bits for each digit
+signal dp:std_logic_vector(3 downto 0);      -- decimal point
+signal anode:std_logic_vector (3 downto 0);     --anode signal
+signal hr_min:std_logic_vector(15 downto 0);    --hours_minutes time format
+signal min_sec:std_logic_vector(15 downto 0);    --minutes_seconds time format
 
                                           
---butoane debounce-uite-------
+-------debounced signals from buttons-------
 signal b1out:std_logic:='0';
 signal b2out:std_logic:='0';
 signal b3out:std_logic:='0';
 
 ------states------------------
 type state is (start,                                                                   --starting state
-               afis_ora,set_alrm,set_tmr,crono,                                         --main states
+               display_time,set_alrm,set_tmr,crono,                                         --main states
                set_hr,set_min,                                                          --time states
                set_al_hr,set_al_min,turn_al_off,                                        --alarm states
                set_hr_tmr,set_min_tmr,start_tmr,pause_tmr,stop_tmr,tmr_ended,           --timer states
-               start_cron,pause_cron,stop_cron                                          --stopwatch states
+               start_stop,pause_cron,stop_stopwtch                                          --stopwatch states
                );
-               
+
+
+-------state signals to cycle---
 signal crt_state,nxt_state:state;
+--------------------------------
+
 
 -----time types---------------
 type sec is record
@@ -99,21 +113,22 @@ type hr is record
     dig2:integer range 0 to 2;
 end record;
 
-type timp is record
+type time is record
     sec:sec;
     min:min;
     hr:hr;
 end record;
 ------------------------------
 
+-----------I will be suing a multiplexer to choose what to display, t_display is the output of the multiplexer
 -----------time var---------------------
-signal t:timp:=((0,0),(0,0),(0,0));         --ora ceasului
-signal t_al:timp:=((0,0),(0,0),(0,0));      --ora alarmei
-signal t_tmr:timp:=((0,0),(0,0),(0,0));     --timp timer
-signal t_cron:timp:=((0,0),(0,0),(0,0));    --timp cronometru
-signal t_al_tmr:timp:=((0,0),(0,1),(0,0));  --durata alarma
-signal t_tmr_def:timp:=((0,0),(1,0),(0,0)); --timer default
-signal t_display:timp:=((0,0),(0,0),(0,0)); --variabila care este citita de driver
+signal t:time:=((0,0),(0,0),(0,0));         --time
+signal t_al:time:=((0,0),(0,0),(0,0));      --alarm time
+signal t_tmr:time:=((0,0),(0,0),(0,0));     --timer time
+signal t_stop:time:=((0,0),(0,0),(0,0));    --stopwatch time
+signal t_al_tmr:time:=((0,0),(0,1),(0,0));  --alarm duration, 1 minute by default
+signal t_tmr_def:time:=((0,0),(1,0),(0,0)); --default timer time 
+signal t_display:time:=((0,0),(0,0),(0,0)); --signal to be proccessed and sent to the 7seg drive
 ----------------------------------------
 ----------------------------------------
 
@@ -121,7 +136,7 @@ signal t_display:timp:=((0,0),(0,0),(0,0)); --variabila care este citita de driv
 begin
 
 
-----------------------------------Componente-------------------------------------------
+----------------------------------Components-------------------------------------------
 --mapare debouncer
 deBounce1: deBouncer port map (bin=>b1,bout=>b1out,clk=>clk,rst=>rst);
 deBounce2: deBouncer port map (bin=>b2,bout=>b2out,clk=>clk,rst=>rst);
@@ -157,17 +172,17 @@ end process;
 states: process(crt_state,b1out)
 begin
 case crt_state is
-    when start=>nxt_state<=afis_ora;
-    when afis_ora=>
+    when start=>nxt_state<=display_time;
+    when display_time=>
                     if b1out='1' then
                         nxt_state<=set_alrm;
                     elsif b2out='1' then
                         nxt_state<=set_hr;
                     else 
-                        nxt_state<=afis_ora;
+                        nxt_state<=display_time;
                     end if;
                     t_display<=t;
-                    d<=ore_min;
+                    d<=hr_min;
                     
     when set_alrm=>
                     if b1out='1' then
@@ -181,7 +196,7 @@ case crt_state is
                     end if;
                     t_display<=t_al;
                     if al_on='1'then 
-                    d<=ore_min;
+                    d<=hr_min;
                     else 
                     d<="0000000000001111";
                     end if;
@@ -196,16 +211,16 @@ case crt_state is
                         nxt_state<=set_tmr; 
                     end if;
                     t_display<=t_tmr;
-                    d<=ore_min;
+                    d<=hr_min;
     when crono=>
                     if b1out='1' then
-                        nxt_state<=afis_ora;
+                        nxt_state<=display_time;
                     elsif b2out='1' then
-                        nxt_state<=start_cron;
+                        nxt_state<=start_stop;
                      else
                         nxt_state<=crono;    
                     end if;
-                    t_display<=t_cron;
+                    t_display<=t_stop;
                     d<=min_sec;
     when set_hr=> 
                     if b2out='1' then
@@ -214,15 +229,15 @@ case crt_state is
                         nxt_state<=set_hr;    
                     end if;
                     t_display<=t;
-                    d<=ore_min;
+                    d<=hr_min;
     when set_min=> 
                     if b2out='1' then
-                        nxt_state<=afis_ora;
+                        nxt_state<=display_time;
                      else
                         nxt_state<=set_min;    
                     end if;    
                     t_display<=t;
-                    d<=ore_min;                            
+                    d<=hr_min;                            
     when set_al_hr=> 
                     if b2out='1' then
                         nxt_state<=set_al_min;
@@ -230,7 +245,7 @@ case crt_state is
                         nxt_state<=set_al_hr;    
                     end if;
                     t_display<=t_al;
-                    d<=ore_min;
+                    d<=hr_min;
     when set_al_min=> 
                     if b2out='1' then
                         nxt_state<=set_alrm;
@@ -238,7 +253,7 @@ case crt_state is
                        nxt_state<=set_al_min;
                     end if;
                     t_display<=t_al;
-                    d<=ore_min;
+                    d<=hr_min;
     when turn_al_off=>
                     nxt_state<=set_alrm;  
                     t_display<=t_al;
@@ -250,7 +265,7 @@ case crt_state is
                         nxt_state<=set_hr_tmr;    
                     end if;
                     t_display<=t_tmr;
-                    d<=ore_min;
+                    d<=hr_min;
     when set_min_tmr=> 
                     if b2out='1' then
                         nxt_state<=set_tmr;
@@ -258,7 +273,7 @@ case crt_state is
                         nxt_state<=set_min_tmr;
                     end if;
                     t_display<=t_tmr;
-                    d<=ore_min;
+                    d<=hr_min;
     when start_tmr=>
                     if b2out='1' then
                         nxt_state<=stop_tmr;
@@ -270,7 +285,7 @@ case crt_state is
                         nxt_state<=start_tmr;
                     end if;
                     t_display<=t_tmr;
-                    d<=ore_min;
+                    d<=hr_min;
     when pause_tmr=>
                     if b3out='1' then
                         nxt_state<=start_tmr;
@@ -280,42 +295,42 @@ case crt_state is
                         nxt_state<=pause_tmr;        
                     end if;
                     t_display<=t_tmr;
-                    d<=ore_min;
+                    d<=hr_min;
     when stop_tmr=>
                     nxt_state<=set_tmr;
                     t_display<=t_tmr;
-                    d<=ore_min;
+                    d<=hr_min;
     when tmr_ended=>
                     if b3out='1' then
                         nxt_state<=stop_tmr;
                     end if;
                     t_display<=t_tmr;
-                    d<=ore_min;                
-    when start_cron=>
+                    d<=hr_min;                
+    when start_stop=>
                     if b2out='1' then
-                        nxt_state<=stop_cron;
+                        nxt_state<=stop_stopwtch;
                     elsif b3out='1' then
                         nxt_state<=pause_cron;
                      else
-                        nxt_state<=start_cron;        
+                        nxt_state<=start_stop;        
                     end if;
-                    t_display<=t_cron;
+                    t_display<=t_stop;
                     d<=min_sec;
     when pause_cron=>
                     if b3out='1' then
-                        nxt_state<=start_cron;
+                        nxt_state<=start_stop;
                      else
                         nxt_state<=pause_cron;    
                     end if;
-                    t_display<=t_cron;
+                    t_display<=t_stop;
                      d<=min_sec;
-    when stop_cron=>
+    when stop_stopwtch=>
                     if b2out='1' then
                         nxt_state<=crono;
                      else
-                        nxt_state<=stop_cron;    
+                        nxt_state<=stop_stopwtch;    
                     end if;
-                    t_display<=t_cron;
+                    t_display<=t_stop;
                     d<=min_sec;
     when others=> nxt_state<=start;                                                                                                                                                                                                                                                     
 end case;
@@ -433,7 +448,7 @@ end if;
 end process;
 ---------------------------------------------------------------------
 validare_alaram: process(rst,clk)   --alarma desteptatoare sau oricare cateodata nu vrei sa sune in fiecare zi.
-begin                               --semnalul al_on valideaza alarma, sa suna sau nu la timpul setat
+begin                               --semnalul al_on valideaza alarma, sa suna sau nu la timeul setat
 
 if rst='1' then
     al_on<='0';
@@ -460,7 +475,7 @@ begin
 if rst='1' then
     al_ctr<=0;  --al_on depinde de reset deja in procesul de mai sus
 elsif rising_edge (clk) then
-    if al_on='1' and t=t_al then                        --daca ora alarmei coencide cu ora ceasului o sa sune in timp ce este setata alarma
+    if al_on='1' and t=t_al then                        --daca ora alarmei coencide cu ora ceasului o sa sune in time ce este setata alarma
             alarm<='1';
     elsif alarm='1' then
         if al_ctr=max_al_time or b3out='1' then     --oprire alarma dupa max_al_time secunde sau manual cu b3
@@ -548,47 +563,47 @@ end if;
 end process;
 
 
-cronometru:process(rst,clk)
+stopwatch:process(rst,clk)
 begin
 
 if rst='1' then
-    t_cron<=((0,0),(0,0),(0,0));
+    t_stop<=((0,0),(0,0),(0,0));
 elsif rising_edge (clk)then
-    if crt_state=start_cron then
+    if crt_state=start_stop then
       if f1hz = '1' then                        --incre secunde si pt cazurile in care sec sunt la 09, 19, 29 ... 59
-        if t_cron.sec.dig1 = 9 then                              
-            t_cron.sec.dig1 <= 0;
-            if t_cron.sec.dig2 = 5 then
-                t_cron.sec.dig2 <= 0;
-                if t_cron.min.dig1 = 9 then
-                    t_cron.min.dig1 <= 0;
-                    if t_cron.min.dig2 = 5 then
-                        t_cron.min.dig2 <= 0;
-                        if t_cron.hr.dig1 = 3 and t_cron.hr.dig2 = 2 then
-                            t_cron.hr.dig1 <= 0;
-                            t_cron.hr.dig2 <= 0;
-                        elsif t_cron.hr.dig1 = 9 then
-                            t_cron.hr.dig1 <= 0;
-                            t_cron.hr.dig2 <= t_cron.hr.dig2 + 1;
-                        else t_cron.hr.dig1 <= t_cron.hr.dig1 + 1;
+        if t_stop.sec.dig1 = 9 then                              
+            t_stop.sec.dig1 <= 0;
+            if t_stop.sec.dig2 = 5 then
+                t_stop.sec.dig2 <= 0;
+                if t_stop.min.dig1 = 9 then
+                    t_stop.min.dig1 <= 0;
+                    if t_stop.min.dig2 = 5 then
+                        t_stop.min.dig2 <= 0;
+                        if t_stop.hr.dig1 = 3 and t_stop.hr.dig2 = 2 then
+                            t_stop.hr.dig1 <= 0;
+                            t_stop.hr.dig2 <= 0;
+                        elsif t_stop.hr.dig1 = 9 then
+                            t_stop.hr.dig1 <= 0;
+                            t_stop.hr.dig2 <= t_stop.hr.dig2 + 1;
+                        else t_stop.hr.dig1 <= t_stop.hr.dig1 + 1;
                         end if;
                     else
-                        t_cron.min.dig2 <= t_cron.min.dig2 + 1;
+                        t_stop.min.dig2 <= t_stop.min.dig2 + 1;
                     end if;
                 else
-                    t_cron.min.dig1 <= t_cron.min.dig1 + 1;
+                    t_stop.min.dig1 <= t_stop.min.dig1 + 1;
                 end if;
             else
-                t_cron.sec.dig2 <= t_cron.sec.dig2 + 1;
+                t_stop.sec.dig2 <= t_stop.sec.dig2 + 1;
             end if;
         else
-            t_cron.sec.dig1 <= t_cron.sec.dig1 + 1;
+            t_stop.sec.dig1 <= t_stop.sec.dig1 + 1;
         end if;
       end if;
-    elsif crt_state=pause_cron or crt_state=stop_cron then
-        t_cron<=t_cron;
+    elsif crt_state=pause_cron or crt_state=stop_stopwtch then
+        t_stop<=t_stop;
     else 
-    t_cron<=((0,0),(0,0),(0,0));        
+    t_stop<=((0,0),(0,0),(0,0));        
     end if;
 end if;
 end process;
@@ -607,7 +622,7 @@ an(1)<=(anode(1) or f1hz) when blink_right='1' else anode(1);
 an(0)<=(anode(0) or f1hz) when blink_right='1' else anode(0);
 ------------------------------------------------------------
 
-ore_min <= std_logic_vector(to_unsigned(t_display.hr.dig2,4)) &
+hr_min <= std_logic_vector(to_unsigned(t_display.hr.dig2,4)) &
                                  std_logic_vector(to_unsigned(t_display.hr.dig1,4)) &
                                  std_logic_vector(to_unsigned(t_display.min.dig2,4)) &
                                  std_logic_vector(to_unsigned(t_display.min.dig1,4));
