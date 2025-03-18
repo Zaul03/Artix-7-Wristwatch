@@ -1,5 +1,5 @@
 # Disclaimer!
-  The project is not working properly as I dont have the board to debug (The university owns it :().
+  The project is not working properly as I dont have the board to debug.
   The board counts the time properly but you cant change the time or use other function (or see if it changed) because the display becomes glitched upon pressing a button.
   Reseting works but not much else (reset is B1 and B2 and B3).
 
